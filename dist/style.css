@@ -306,3 +306,22 @@ footer{border-top:1px solid var(--line);padding:24px 38px;display:flex;justify-c
 .lesson p code,.lesson li code,.lesson td code{background:var(--tint);padding:1px 5px;border-radius:4px}
 @media print{.lesson pre{white-space:pre-wrap;background:#f2f2f2;color:#111}}
 
+
+/* コース（資格ごと）に分かれたサイト（2026-10-24 追加） */
+.track-switch{display:grid;grid-template-columns:repeat(auto-fit,minmax(0,1fr));gap:4px;margin:0 0 14px;padding:3px;background:var(--tint);border-radius:8px}
+.track-switch a{text-align:center;font-size:12px;font-weight:600;padding:7px 4px;border-radius:6px;text-decoration:none;color:var(--muted)}
+.track-switch a:hover{color:var(--accent)}
+.track-switch a.active{background:var(--panel);color:var(--accent);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.nav-track{font-size:9px;font-weight:700;color:var(--accent);border:1px solid var(--tint-2);border-radius:10px;padding:0 5px;margin-right:2px}
+.track-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:0 0 30px}
+.track-card{display:flex;flex-direction:column;padding:22px;background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--accent);border-radius:10px;text-decoration:none;color:var(--ink);transition:transform .15s,border-color .15s}
+.track-card:hover{transform:translateY(-3px);border-color:var(--accent)}
+.track-card .index{font:11px ui-monospace,monospace;color:var(--accent)}
+.track-card h3{font-size:19px;margin:6px 0}
+.track-card p{font-size:12.5px;color:var(--muted);margin:0 0 10px}
+.track-card ul{margin:0 0 14px;padding-left:1.1em;font-size:12px}
+.track-progress{margin-top:auto}
+.track-progress small{display:block;font-size:11px;color:var(--muted)}
+.track-card .go{margin-top:12px;font-weight:700;color:var(--accent);font-size:13px}
+@media(max-width:1050px){.track-cards{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:720px){.track-switch{margin:10px 0 0}}

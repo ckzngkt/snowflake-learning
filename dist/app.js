@@ -24,28 +24,52 @@ function lessonSearchText(l){
   return plain([l.title,l.subtitle,l.summary,l.goal,...(l.tags||[]),...l.sections.flat(),...l.takeaways].join(' ')).normalize('NFKC').toLowerCase();
 }
 
+// ---------- コース（SITE.tracks が true のサイトだけ。EXAMS ごとに章を分ける） ----------
+const useTracks=()=>!!SITE.tracks&&hasExams();
+const trackInfo=t=>EXAMS.find(e=>e.id===t);
+const trackLessons=t=>LESSONS.map((_,i)=>i).filter(i=>!t||LESSONS[i].exam===t);
+function currentTrack(){
+  if(!useTracks())return null;
+  let m=location.hash.match(/^#track-(\w+)$/);if(m&&trackInfo(m[1]))return m[1];
+  m=location.hash.match(/^#chapter-(\d+)$/);if(m&&LESSONS[m[1]-1])return LESSONS[m[1]-1].exam;
+  return state.track&&trackInfo(state.track)?state.track:null;
+}
+// 表示用の章番号（コースがあれば、コースの中での番号）
+const chapterNo=i=>useTracks()?trackLessons(LESSONS[i].exam).indexOf(i)+1:i+1;
+const chapterLabel=i=>useTracks()?`${trackInfo(LESSONS[i].exam).short} 第${chapterNo(i)}章`:`第${i+1}章`;
+const mapHash=t=>t?`#track-${t}`:'#home';
+
 // ---------- サイドバー ----------
 function nav(){
   const q=$('#search').value.normalize('NFKC').trim().toLowerCase();
   const active=location.hash||'#home';
-  let html=`<a class="navitem ${active==='#home'?'active':''}" href="#home"><span class="num">⌂</span>学習マップ</a><a class="navitem ${active==='#fields'?'active':''}" href="#fields"><span class="num">◇</span>${SITE.fieldsNav}</a>${hasExams()?`<a class="navitem ${active==='#exam'?'active':''}" href="#exam"><span class="num">✎</span>模擬試験</a>`:''}`;
+  const t=currentTrack();
+  let html='';
+  if(useTracks())html+=`<div class="track-switch" role="group" aria-label="コースの切り替え">${EXAMS.map(e=>`<a href="#track-${e.id}" class="${e.id===t?'active':''}" ${e.id===t?'aria-current="true"':''}>${e.short}</a>`).join('')}</div>`;
+  html+=`<a class="navitem ${active==='#home'?'active':''}" href="#home"><span class="num">⌂</span>${useTracks()?'ホーム（コース一覧）':'学習マップ'}</a>`;
+  if(t)html+=`<a class="navitem ${active===`#track-${t}`?'active':''}" href="#track-${t}"><span class="num">▤</span>${trackInfo(t).title}の学習マップ</a>`;
+  html+=`<a class="navitem ${active==='#fields'?'active':''}" href="#fields"><span class="num">◇</span>${SITE.fieldsNav}</a>${hasExams()?`<a class="navitem ${active==='#exam'?'active':''}" href="#exam"><span class="num">✎</span>模擬試験</a>`:''}`;
   let hits=0;
+  if(useTracks()&&!t&&!q)html+='<p class="empty">コースを選ぶと、そのコースの章が表示されます。</p>';
   AREAS.forEach(a=>{
+    if(useTracks()&&!q&&(!t||(a.exam&&a.exam!==t)))return;
     const items=LESSONS.map((l,i)=>({l,i})).filter(({l})=>l.area===a.id&&(!q||lessonSearchText(l).includes(q)));
     if(!items.length)return;
     hits+=items.length;
     if(!q)html+=`<div class="nav-phase">${a.name}</div>`;
-    html+=items.map(({l,i})=>{const cur=active===`#chapter-${i+1}`;return `<a class="navitem ${cur?'active':''} ${state.done.includes(i)?'done':''}" href="#chapter-${i+1}" ${cur?'aria-current="page"':''}><span class="num">${state.done.includes(i)?'✓':pad(i+1)}</span>${l.title}</a>`}).join('');
+    html+=items.map(({l,i})=>{const cur=active===`#chapter-${i+1}`;return `<a class="navitem ${cur?'active':''} ${state.done.includes(i)?'done':''}" href="#chapter-${i+1}" ${cur?'aria-current="page"':''}><span class="num">${state.done.includes(i)?'✓':pad(chapterNo(i))}</span>${q&&useTracks()?`<small class="nav-track">${trackInfo(l.exam).short}</small> `:''}${l.title}</a>`}).join('');
   });
   if(q&&!hits)html+='<p class="empty">該当する章がありません。</p>';
   $('#nav').innerHTML=html;
-  $('#count').textContent=`${state.done.length} / ${LESSONS.length}`;
-  $('#progress').max=LESSONS.length;$('#progress').value=state.done.length;
+  const scope=trackLessons(t),done=scope.filter(i=>state.done.includes(i)).length;
+  $('#count').textContent=`${done} / ${scope.length}`;
+  $('#progress').max=scope.length;$('#progress').value=done;
 }
 
 // ---------- ホーム ----------
 function sourceLinks(keys){return keys.map(k=>{const [t,u]=SOURCES[k];return u?`<a href="${u}" target="_blank" rel="noopener">${t} ↗</a>`:`<span class="src">${t}</span>`}).join('')}
 function home(){
+  if(useTracks())return tracksHome();
   const next=LESSONS.findIndex((_,i)=>!state.done.includes(i));
   const start=next<0?0:next;
   const planned=AREAS.reduce((n,a)=>n+(a.planned||[]).length,0);
@@ -60,10 +84,36 @@ ${SITE.schedule?`<div class="sectionhead"><h2>${SITE.schedule.title}</h2><small>
 <div class="sectionhead"><h2>この教材について・参考資料</h2></div><div class="sources"><p>${SITE.about}</p>${sourceLinks(SITE.homeSources)}</div></div>`;
 }
 
+function phasesHtml(areas){
+  return areas.map((a,n)=>{const ls=LESSONS.map((l,i)=>({l,i})).filter(({l})=>l.area===a.id);return `<section class="phase"><div class="phase-label">PHASE ${pad(n+1)}<b>${a.name}</b>${a.lead}</div><div class="cards">${ls.map(({l,i})=>`<a class="chaptercard" href="#chapter-${i+1}"><span class="index">${pad(chapterNo(i))} ${state.done.includes(i)?'✓':''}</span><h3>${l.title}</h3><p>${l.subtitle}</p><small>学習時間の目安 ${l.time}分 <span aria-hidden="true">↗</span></small></a>`).join('')}</div></section>`}).join('');
+}
+function tracksHome(){
+  return `<div class="home"><div class="hero"><div><p class="eyebrow">${SITE.eyebrow}</p><h1>${SITE.heroTitle}</h1><p class="lead">${SITE.lead}</p><a class="primary" href="#track-${state.track&&trackInfo(state.track)?state.track:EXAMS[0].id}">${state.track&&trackInfo(state.track)?`続きから：${trackInfo(state.track).title}`:`${EXAMS[0].title}から始める`} <span aria-hidden="true">↗</span></a></div><div class="hero-visual" aria-label="${esc(SITE.heroLabel)}">${SITE.heroVisual}</div></div>
+<div class="facts">${SITE.facts.map(([b,s])=>`<div><b>${b}</b><span>${s}</span></div>`).join('')}</div>
+<div class="sectionhead"><h2>コースを選ぶ</h2><small>資格ごとに分かれています</small></div><p class="lead" style="max-width:none;margin:-8px 0 16px">${SITE.trackIntro||''}</p>
+<div class="track-cards">${EXAMS.map(e=>{const ls=trackLessons(e.id),d=ls.filter(i=>state.done.includes(i)).length,q=ls.reduce((n,i)=>n+LESSONS[i].quiz.length,0);return `<a class="track-card" href="#track-${e.id}"><span class="index">${e.name}</span><h3>${e.title}</h3><p>${e.lead}</p><ul><li>${ls.length}章 · 練習問題 ${q}問</li><li>${e.info[0][1]} · ${e.info[3][1]}</li><li>前提：${e.info[4][1]}</li></ul><div class="track-progress"><progress max="${ls.length}" value="${d}"></progress><small>${d} / ${ls.length} 章 完了</small></div><span class="go">コースを開く →</span></a>`}).join('')}</div>
+<a class="field-teaser" href="#fields"><span>${SITE.teaser[0]}</span><b>${SITE.teaser[1]}</b><small>${SITE.teaser[2]} →</small></a>
+<div class="guide"><h3>学習の進め方（3ステップ）</h3>${SITE.steps.map(([t,d],i)=>`<p><b>${i+1}. ${t}</b> ${d}</p>`).join('')}<p>${SITE.stepsNote}</p></div>
+<div class="sectionhead"><h2>この教材について・参考資料</h2></div><div class="sources"><p>${SITE.about}</p>${sourceLinks(SITE.homeSources)}</div></div>`;
+}
+function trackHome(t){
+  const e=trackInfo(t),ls=trackLessons(t),next=ls.find(i=>!state.done.includes(i)),start=next===undefined?ls[0]:next;
+  const count=d=>ls.filter(i=>LESSONS[i].domain===d).length;
+  return `<div class="home"><div class="lesson-nav"><a href="#home">ホーム</a> / ${e.title}</div><p class="eyebrow">${e.name}</p><h1>${e.title}</h1><p class="lead" style="max-width:760px">${e.lead}</p>
+<p style="margin-top:18px;display:flex;gap:12px;flex-wrap:wrap"><a class="primary" href="#chapter-${start+1}">${ls.some(i=>state.done.includes(i))?`続きから：第${chapterNo(start)}章`:'第1章から始める'} <span aria-hidden="true">↗</span></a><a class="home-link" href="#exam" style="padding:10px 18px">このコースの模擬試験 →</a></p>
+<div class="sectionhead"><h2>試験の概要</h2><small>公式の認定ページで確認（2026-10-24）</small></div>
+${table(['項目','内容'],e.info)}
+${table(['領域','配点','このコースの章'],e.domains.map(([d,n,w])=>[`${d} ${n}`,`${w}%`,`${count(d)}章`]))}
+<div class="sectionhead"><h2>学習マップ</h2><small>全${ls.length}章を、試験の領域ごとに並べています。</small></div>
+${phasesHtml(AREAS.filter(a=>a.exam===t))}
+${e.schedule?`<div class="sectionhead"><h2>4週間の進め方（例）</h2><small>ペースは自由です</small></div><div class="schedule">${e.schedule.map((x,i)=>`<div><b>Week ${i+1}</b>${x}</div>`).join('')}</div>`:''}
+<div class="sectionhead"><h2>参考資料</h2></div><div class="sources">${sourceLinks([e.source,'docs'].filter(k=>SOURCES[k]))}</div></div>`;
+}
+
 // ---------- 分野マップ ----------
 function fieldItem(item){
   const [name,type,desc,example,chapter,label]=item;
-  return `<details class="topic" data-search="${esc(plain(item.join(' ')).toLowerCase())}"><summary><span class="topic-name">${name}</span><span class="type-tag">${type}</span><span class="topic-plus" aria-hidden="true">＋</span></summary><div class="topic-body"><p>${desc}</p><div class="topic-example">${example}</div>${chapter?`<p><a href="#chapter-${chapter}">第${chapter}章 ${LESSONS[chapter-1].title}で学ぶ →</a></p>`:`<span class="topic-future">${label||'発展 · このサイトではまだ扱っていません'}</span>`}</div></details>`;
+  return `<details class="topic" data-search="${esc(plain(item.join(' ')).toLowerCase())}"><summary><span class="topic-name">${name}</span><span class="type-tag">${type}</span><span class="topic-plus" aria-hidden="true">＋</span></summary><div class="topic-body"><p>${desc}</p><div class="topic-example">${example}</div>${chapter?`<p><a href="#chapter-${chapter}">${chapterLabel(chapter-1)} ${LESSONS[chapter-1].title}で学ぶ →</a></p>`:`<span class="topic-future">${label||'発展 · このサイトではまだ扱っていません'}</span>`}</div></details>`;
 }
 function fieldsPage(){
   const total=FIELDS.branches.reduce((a,g)=>a+g.items.length,0);
@@ -176,8 +226,8 @@ function examPool(id){return LESSONS.flatMap((l,i)=>(id==='all'||l.exam===id)?l.
 function shuffle(a){a=[...a];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function examPage(){
   const hist=(state.exams||[]).slice(-5).reverse();
-  return `<article class="lesson exam-page"><div class="lesson-nav"><a href="#home">学習マップ</a> / 模擬試験</div><p class="eyebrow">PRACTICE EXAM</p><h1>模擬試験</h1><p class="summary">${SITE.examIntro||''}</p>
-<div class="lab"><span class="lab-heading">SETTINGS</span><h3>出題の範囲と問題数</h3><div class="labgrid"><div><label for="exam-scope">範囲</label><select id="exam-scope">${EXAMS.map(e=>`<option value="${e.id}">${e.name}（${examPool(e.id).length}問から）</option>`).join('')}<option value="all">すべての章（${examPool('all').length}問から）</option></select></div><div><label for="exam-count">問題数</label><select id="exam-count"><option value="10">10問</option><option value="20" selected>20問</option><option value="0">全問</option></select></div></div><div class="lab-actions"><button class="primary" id="exam-start">開始する</button></div></div>
+  return `<article class="lesson exam-page"><div class="lesson-nav"><a href="${mapHash(currentTrack())}">学習マップ</a> / 模擬試験</div><p class="eyebrow">PRACTICE EXAM</p><h1>模擬試験</h1><p class="summary">${SITE.examIntro||''}</p>
+<div class="lab"><span class="lab-heading">SETTINGS</span><h3>出題の範囲と問題数</h3><div class="labgrid"><div><label for="exam-scope">範囲</label><select id="exam-scope">${EXAMS.map(e=>`<option value="${e.id}" ${e.id===state.track?'selected':''}>${e.name}（${examPool(e.id).length}問から）</option>`).join('')}<option value="all">すべての章（${examPool('all').length}問から）</option></select></div><div><label for="exam-count">問題数</label><select id="exam-count"><option value="10">10問</option><option value="20" selected>20問</option><option value="0">全問</option></select></div></div><div class="lab-actions"><button class="primary" id="exam-start">開始する</button></div></div>
 ${hist.length?`<div class="takeaways"><h3>これまでの結果（このブラウザに保存）</h3><ul>${hist.map(h=>`<li>${h.date} · ${h.name} · ${h.correct} / ${h.total}問（${Math.round(h.correct/h.total*100)}%）</li>`).join('')}</ul></div>`:''}
 <div id="exam-area"></div></article>`;
 }
@@ -195,7 +245,7 @@ function gradeExam(){
   items.forEach((item,k)=>{const it=examRun.items[k],ok=markQuiz(item,it.q,'show');if(ok)correct++;
     const key=it.exam+'|'+it.domain;by[key]=by[key]||[0,0];by[key][1]++;if(ok)by[key][0]++;
     $$('.answer',item).forEach(b=>b.disabled=true);
-    $('.feedback',item).innerHTML=`${ok?'○ 正解。':'× 不正解。'}${it.q[3]} <a href="#chapter-${it.i+1}">第${it.i+1}章で復習 →</a>`});
+    $('.feedback',item).innerHTML=`${ok?'○ 正解。':'× 不正解。'}${it.q[3]} <a href="#chapter-${it.i+1}">${chapterLabel(it.i)}で復習 →</a>`});
   $('#exam-grade').remove();$('#exam-warn').textContent='';
   const total=items.length,pct=Math.round(correct/total*100);
   const rows=EXAMS.flatMap(e=>e.domains.map(([d,name,w])=>{const r=by[e.id+'|'+d];return r?[`${e.short} ${d} ${name}`,`${w}%`,`${r[0]} / ${r[1]}`,`${Math.round(r[0]/r[1]*100)}%`]:null}).filter(Boolean));
@@ -208,8 +258,9 @@ function gradeExam(){
 function lesson(i,print=false){
   const l=LESSONS[i],n=LESSONS.length,area=AREAS.find(a=>a.id===l.area);
   const ans=state.answers[i]||{},ex=examOf(l);
-  return `<article class="lesson" data-chapter="${i}"><div class="lesson-nav"><a href="#home">学習マップ</a> / ${area.name} / 第${i+1}章</div>
-<p class="eyebrow">CHAPTER ${pad(i+1)} / ${pad(n)} · 学習時間の目安 ${l.time}分</p><h1>${l.title}</h1><p class="summary">${l.summary}</p><div class="tags">${ex?`<span class="tag-exam">${ex.short} · 領域 ${l.domain} ${ex.domains.find(d=>d[0]===l.domain)[1]}</span>`:''}${l.tags.map(t=>`<span>${t}</span>`).join('')}</div>
+  const t=useTracks()?l.exam:null,list=trackLessons(t),pos=list.indexOf(i),prev=list[pos-1],next=list[pos+1],map=mapHash(t);
+  return `<article class="lesson" data-chapter="${i}"><div class="lesson-nav"><a href="${map}">${t?trackInfo(t).title:'学習マップ'}</a> / ${area.name} / 第${chapterNo(i)}章</div>
+<p class="eyebrow">${t?trackInfo(t).short.toUpperCase()+' · ':''}CHAPTER ${pad(chapterNo(i))} / ${pad(list.length)} · 学習時間の目安 ${l.time}分</p><h1>${l.title}</h1><p class="summary">${l.summary}</p><div class="tags">${ex?`<span class="tag-exam">${ex.short} · 領域 ${l.domain} ${ex.domains.find(d=>d[0]===l.domain)[1]}</span>`:''}${l.tags.map(t=>`<span>${t}</span>`).join('')}</div>
 <div class="objectives"><b>この章のゴール</b><p>${l.goal}</p></div>
 ${l.sections.map(([t,b],j)=>`<section><h2><span class="secnum">${pad(j+1)}</span>${t}</h2>${b}</section>`).join('')}
 ${labsOf(l,i).map((lab,k)=>`<div class="lab" data-lab="${k}"><span class="lab-heading">TRY IT YOURSELF${labsOf(l,i).length>1?` · ${k+1}`:''}</span>${labMarkup(lab,print)}</div>`).join('')}
@@ -217,7 +268,7 @@ ${labsOf(l,i).map((lab,k)=>`<div class="lab" data-lab="${k}"><span class="lab-he
 <section class="exercise"><h3>自分の手で考える</h3>${l.exercise.map((e,k)=>`<div class="ex"><p>${k+1}. ${e.q}</p>${print?'':`<textarea data-answer-box="${k}" aria-label="演習${k+1}の自分の答え" placeholder="自分の答えを書いてみましょう（このブラウザに保存されます）">${esc(ans[k]||'')}</textarea>`}<details ${print?'open':''}><summary>解答の例を見る</summary><p>${e.a}</p></details></div>`).join('')}</section>
 <div class="takeaways"><h3>この章のまとめ</h3><ul>${l.takeaways.map(t=>`<li>${t}</li>`).join('')}</ul></div>
 ${print?'':`<div class="memo"><label for="memo">学習メモ</label><textarea id="memo" placeholder="今日理解したこと、まだ疑問なこと、自分の言葉での説明…">${esc(state.notes[i]||'')}</textarea><small id="memo-status" aria-live="polite">このブラウザ内だけに保存します。別端末には同期されません。</small></div>
-<div class="lesson-bottom"><a href="${i?`#chapter-${i}`:'#home'}">← ${i?'前の章':'学習マップ'}</a><button class="primary" id="complete">${state.done.includes(i)?'✓ 完了済み（取り消す）':'この章を完了にする'}</button><a href="${i<n-1?`#chapter-${i+2}`:'#home'}">${i<n-1?'次の章':'学習マップ'} →</a></div>`}
+<div class="lesson-bottom"><a href="${prev!==undefined?`#chapter-${prev+1}`:map}">← ${prev!==undefined?'前の章':'学習マップ'}</a><button class="primary" id="complete">${state.done.includes(i)?'✓ 完了済み（取り消す）':'この章を完了にする'}</button><a href="${next!==undefined?`#chapter-${next+1}`:map}">${next!==undefined?'次の章':t?'コースの学習マップ':'学習マップ'} →</a></div>`}
 <div class="sources"><b>参考資料</b>${sourceLinks(l.sources)}</div></article>`;
 }
 function bindLesson(i){
@@ -252,10 +303,13 @@ function render(focus=false){
   if(legacy){history.replaceState(null,'',`#chapter-${legacy[1]}`)}
   nav();
   const m=location.hash.match(/^#chapter-(\d+)$/);const i=m?Number(m[1])-1:-1;
-  if(location.hash==='#exam'&&hasExams()){$('#main').innerHTML=examPage();document.title=`模擬試験｜${SITE.name}`;initExam()}
+  const tr=currentTrack();if(tr&&state.track!==tr){state.track=tr;save()}
+  const tm=location.hash.match(/^#track-(\w+)$/);
+  if(tm&&useTracks()&&trackInfo(tm[1])){$('#main').innerHTML=trackHome(tm[1]);document.title=`${trackInfo(tm[1]).title}｜${SITE.name}`}
+  else if(location.hash==='#exam'&&hasExams()){$('#main').innerHTML=examPage();document.title=`模擬試験｜${SITE.name}`;initExam()}
   else if(location.hash==='#fields'){$('#main').innerHTML=fieldsPage();document.title=`${SITE.fieldsNav}｜${SITE.name}`;initFields()}
   else if(i<0||i>=LESSONS.length){$('#main').innerHTML=home();document.title=`${SITE.title}｜${SITE.name}`}
-  else{$('#main').innerHTML=lesson(i);document.title=`第${i+1}章 ${LESSONS[i].title}｜${SITE.name}`;bindLesson(i)}
+  else{$('#main').innerHTML=lesson(i);document.title=`${chapterLabel(i)} ${LESSONS[i].title}｜${SITE.name}`;bindLesson(i)}
   if(focus){window.scrollTo({top:0,behavior:'instant'});$('#main').focus({preventScroll:true})}
 }
 loadState();

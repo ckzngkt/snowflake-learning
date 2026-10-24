@@ -1,5 +1,5 @@
-// Snowflake 学習サイトの設定。仕組みは app.js（全サイト共通）。章の本文は lessons-core.js / lessons-de.js。
-// 目的は SnowPro Core（COF-C03）と SnowPro Advanced: Data Engineer（DEA-C02）の受験準備。
+// Snowflake 学習サイトの設定。仕組みは app.js（全サイト共通）。章の本文は lessons-core1.js / lessons-core2.js / lessons-de.js / lessons-ara.js。
+// 目的は SnowPro Core（COF-C03）・Advanced: Data Engineer（DEA-C02）・Advanced: Architect（ARA-C01）の受験準備。コースは EXAMS ごとに分かれる。
 // 本文は概念の理解が目的なので、式は使わず、言葉・図・具体例で説明する。SQL は「形を見る」ための短い例だけにする。
 // 試験の情報は Snowflake 公式の認定ページで 2026-10-24 に確認したもの。
 const table=(heads,rows,cls='')=>`<div class="tablewrap"><table class="${cls}"><thead><tr>${heads.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(x=>`<td>${x}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
@@ -9,54 +9,62 @@ const tree=(root,kids)=>`<div class="tree"><div class="tree-root">${root}</div><
 const sql=(code)=>`<pre><code>${code.trim().replace(/&/g,'&amp;').replace(/</g,'&lt;')}</code></pre>`;
 const exam=(text)=>`<div class="note"><b>試験のポイント：</b>${text}</div>`;
 
-// 試験の概要（公式の認定ページ、2026-10-24 確認）
+// 試験の概要（公式の認定ページ、2026-10-24 確認）。サイトは試験ごとのコース（トラック）に分かれ、章の exam でどのコースかを決める。
 const EXAMS=[
-  {id:'core',name:'SnowPro Core（COF-C03）',short:'Core',
+  {id:'core',name:'SnowPro Core（COF-C03）',short:'Core',title:'SnowPro Core コース',
+   lead:'Snowflake の全体を一周する基礎のコースです。アーキテクチャ・アカウントとガバナンス・ロード・性能・コラボレーションを学びます。Data Engineer と Architect の前提の資格です。',
+   info:[['問題数・時間','100問 · 115分'],['形式','1つ選ぶ・複数選ぶ'],['合格ライン','750（0〜1000の換算点）'],['受験料','175米ドル'],['前提','なし（Snowflake の利用経験6か月以上が目安）'],['日本語','あり（COF-C03-JPN）']],
+   schedule:['第1〜4章：アーキテクチャ・ウェアハウス・ストレージ・半構造化<br>＋ 模擬試験 10問','第5〜10章：ロール・認証・ガバナンス・ステージ・ロード・接続<br>＋ 模擬試験 20問','第11〜15章：キャッシュ・性能・変換・保護・共有<br>＋ 模擬試験 全問','総復習：正答率の低い領域の章を読み直す<br>→ 受験'],
+   source:'core',
    domains:[['1.0','機能とアーキテクチャ',31],['2.0','アカウント管理とガバナンス',20],['3.0','ロード・アンロード・接続',18],['4.0','パフォーマンス・クエリ・変換',21],['5.0','データコラボレーション',10]]},
-  {id:'de',name:'SnowPro Advanced: Data Engineer（DEA-C02）',short:'DE',
+  {id:'de',name:'SnowPro Advanced: Data Engineer（DEA-C02）',short:'DE',title:'Data Engineer コース',
+   lead:'データを取り込み、変換し、速く安全に届けるパイプラインを、設計と運用の目線で深めます。Core の内容を前提にしています。',
+   info:[['問題数・時間','65問 · 115分'],['形式','1つ選ぶ・複数選ぶ・インタラクティブ'],['合格ライン','750（0〜1000の換算点）'],['受験料','375米ドル'],['前提','SnowPro Core 認定（実務経験2年以上が目安）'],['日本語','あり（DEA-C02-JPN）']],
+   schedule:['第1〜2章：Snowpipe・Snowpipe Streaming・データレイク<br>＋ 模擬試験 10問','第3〜5章：性能の最適化・保護の設計・ガバナンスの運用<br>＋ 模擬試験 20問','第6〜7章：ストリームとタスク・動的テーブル・Snowpark<br>＋ 模擬試験 全問','総復習：無料トライアルで、パイプとタスクを実際に動かす<br>→ 受験'],
+   source:'dea',
    domains:[['1.0','データ移動',28],['2.0','パフォーマンス最適化',19],['3.0','ストレージとデータ保護',14],['4.0','データガバナンス',14],['5.0','データ変換',25]]},
+  {id:'ara',name:'SnowPro Advanced: Architect（ARA-C01）',short:'Architect',title:'Architect コース',
+   lead:'業務・セキュリティ・規制の要件から、アカウント構成・データモデル・共有・事業継続・パイプライン・性能とコストまでを、全体として設計する力を養います。Core の内容を前提にしています。',
+   info:[['問題数・時間','65問 · 115分'],['形式','1つ選ぶ・複数選ぶ・インタラクティブ'],['合格ライン','750（0〜1000の換算点）'],['受験料','375米ドル'],['前提','SnowPro Core 認定（アーキテクトとしての実務経験2年以上が目安）'],['日本語','あり（ARA-C01-JPN）']],
+   schedule:['第1〜2章：組織・アカウント・ロール、セキュリティとコンプライアンス<br>＋ 模擬試験 10問','第3〜5章：データモデル、共有と提供、事業継続と開発環境<br>＋ 模擬試験 20問','第6〜7章：パイプライン全体、性能とコスト<br>＋ 模擬試験 全問','総復習：Data Engineer コースの章も読み、設計の選択肢を広げる<br>→ 受験'],
+   source:'ara',
+   domains:[['1.0','アカウントとセキュリティ',25],['2.0','アーキテクチャ',30],['3.0','データエンジニアリング',25],['4.0','パフォーマンス最適化',20]]},
 ];
 
-const SITE={key:'snowflake-learning-v1',shuffleOptions:true,name:'Snowflake Learning Lab',title:'Snowflake 入門と SnowPro 対策',logo:'S',
+const SITE={key:'snowflake-learning-v1',shuffleOptions:true,tracks:true,name:'Snowflake Learning Lab',title:'Snowflake 入門と SnowPro 対策',logo:'S',
   fieldsNav:'Snowflakeの分野マップ',
-  eyebrow:'SnowPro Core · Data Engineer 対策',
+  eyebrow:'SnowPro Core · Data Engineer · Architect 対策',
   heroTitle:'Snowflakeを、<br><em>仕組み</em>から理解して<br>合格する',
-  lead:'SnowPro Core と SnowPro Advanced: Data Engineer の出題範囲に沿って、<br>アーキテクチャ・ロード・変換・性能・ガバナンスを、図と実験と練習問題で学びます。',
+  lead:'SnowPro の3つの資格に合わせた3つのコースで、アーキテクチャ・ロード・変換・性能・ガバナンス・設計を、<br>図と実験と練習問題で学びます。',
   heroLabel:'ストレージ・コンピュート・クラウドサービスの3層構造の図',
   heroVisual:`<div class="visual-label">THREE LAYERS, SEPARATED</div><div class="hv-row"><div class="hv-box hv-dark">クラウドサービス層<small>認証・最適化・メタデータ・結果キャッシュ</small></div></div><div class="hv-arrow">↓ ↑</div><div class="hv-row"><div class="hv-box">仮想ウェアハウス A<small>ETL 用 · Large</small></div><div class="hv-box">仮想ウェアハウス B<small>BI 用 · Small</small></div><div class="hv-box">仮想ウェアハウス C<small>分析用 · Medium</small></div></div><div class="hv-arrow">↓ ↑</div><div class="hv-row"><div class="hv-box">ストレージ層<small>マイクロパーティション（列指向・圧縮）</small></div></div><span class="hv-note">概念図 · 計算（ウェアハウス）を、データを共有したまま別々に増やせる</span>`,
-  facts:[['22','Core 15章 · DE 7章'],['2','対象の試験'],['110','練習問題（模擬試験に使用）']],
+  facts:[['3','コース（資格ごと）'],['29','Core 15 · DE 7 · Architect 7 章'],['145','練習問題（模擬試験に使用）']],
   teaser:['まずは全体像から','Snowflakeには、どんな機能がある？','アーキテクチャ・取り込み・変換・性能・保護・ガバナンスの地図'],
-  homeExtra:`<div class="sectionhead"><h2>2つの試験の概要</h2><small>公式の認定ページで 2026-10-24 に確認</small></div>
-<div class="tablewrap"><table><thead><tr><th></th><th>SnowPro Core（COF-C03）</th><th>SnowPro Advanced: Data Engineer（DEA-C02）</th></tr></thead><tbody>
-<tr><td>問題数・時間</td><td>100問 · 115分</td><td>65問 · 115分</td></tr>
-<tr><td>形式</td><td>1つ選ぶ・複数選ぶ</td><td>1つ選ぶ・複数選ぶ・インタラクティブ</td></tr>
-<tr><td>合格ライン</td><td>750（0〜1000の換算点）</td><td>750（0〜1000の換算点）</td></tr>
-<tr><td>受験料</td><td>175米ドル</td><td>375米ドル</td></tr>
-<tr><td>前提</td><td>なし（Snowflake の利用経験6か月以上が目安）</td><td>SnowPro Core 認定（実務経験2年以上が目安）</td></tr>
-<tr><td>日本語</td><td>あり（COF-C03-JPN）</td><td>あり（DEA-C02-JPN）</td></tr>
-<tr><td>領域と配点</td><td>1.0 機能とアーキテクチャ 31%<br>2.0 アカウント管理とガバナンス 20%<br>3.0 ロード・アンロード・接続 18%<br>4.0 パフォーマンス・クエリ・変換 21%<br>5.0 データコラボレーション 10%</td><td>1.0 データ移動 28%<br>2.0 パフォーマンス最適化 19%<br>3.0 ストレージとデータ保護 14%<br>4.0 データガバナンス 14%<br>5.0 データ変換 25%</td></tr>
-</tbody></table></div>
-<p class="sources" style="margin-top:-8px">採点対象外の問題が含まれることがあります。細かい出題項目は、公式の試験ガイド（認定ページからダウンロード）で確認してください。受験料や形式は変わることがあります。</p>`,
+  trackIntro:'まず Core コースで全体を一周し、Core に合格してから、仕事に合わせて Data Engineer か Architect のコースに進むのがおすすめです。',
   steps:[['仕組みをつかむ。','章の図と表で、その機能が「何のために」「どこで動くか」を確認する。'],['実験と練習問題で確かめる。','分類やスライダーの実験で考え方を使い、理解チェックで試験の形に慣れる。'],['模擬試験で弱点を見つける。','領域ごとの正答率を見て、低い領域の章に戻る。可能なら無料トライアルで実際に手を動かす。']],
-  stepsNote:'Core から順に進め、Core に合格してから Data Engineer の章に進むのがおすすめです。章と試験領域の対応は、公式の領域名と概要からこのサイトが整理したものです。',
-  schedule:{title:'8週間の進め方（例）',small:'Core 4週 · Data Engineer 4週',weeks:['第1〜4章：アーキテクチャ・ウェアハウス・ストレージ・半構造化<br>＋ 模擬試験（Core 10問）','第5〜10章：ロール・認証・ガバナンス・ロード・接続<br>＋ 模擬試験（Core 20問）','第11〜15章：キャッシュ・性能・変換・保護・共有<br>→ Core 受験','第16〜22章：取り込み・データレイク・性能・保護・ガバナンス・変換<br>→ Data Engineer 受験']},
+  stepsNote:'章と試験領域の対応は、公式の領域名と概要からこのサイトが整理したものです。細かい出題項目は、公式の試験ガイド（認定ページからダウンロード）で確認してください。採点対象外の問題が含まれることがあり、受験料や形式は変わることがあります。',
   examIntro:'各章の理解チェックから、ランダムに出題します。本番と同じく、選び終えてから最後にまとめて採点します。結果は領域ごとの正答率で表示するので、弱い領域の章に戻って復習しましょう。',
   examNote:'ここの問題は、このサイトの理解チェックから作ったもので、公式の問題ではありません。本番の合格ラインは換算点の750/1000で、正答率とは一致しません。目安として、各領域で8割以上を目指しましょう。',
   about:'Snowflake 公式ドキュメントと公式の認定ページをもとに、個人の学習用にまとめたものです。Snowflake 社の公式教材ではなく、試験問題とは関係ありません。Snowflake は機能の追加・変更が速いので、細かい仕様や上限値は最新の公式ドキュメントで確認してください。例はすべて架空です。',
   homeSources:['cert','docs','editions','quickstarts'],
 };
 
+// exam は、そのまとまりが属するコース（EXAMS の id）
 const AREAS=[
-  {id:'c1',name:'Core 1：機能とアーキテクチャ',lead:'3層構造・ウェアハウス・ストレージ・データの種類（配点 31%）'},
-  {id:'c2',name:'Core 2：アカウント管理とガバナンス',lead:'ロールと権限・認証・コスト管理・ポリシー（配点 20%）'},
-  {id:'c3',name:'Core 3：ロード・アンロード・接続',lead:'ステージ・COPY・Snowpipe・ドライバーとツール（配点 18%）'},
-  {id:'c4',name:'Core 4：パフォーマンス・クエリ・変換',lead:'キャッシュ・クエリプロファイル・最適化機能・変換（配点 21%）'},
-  {id:'c5',name:'Core 5：データコラボレーション',lead:'Time Travel・クローン・共有・リスティング（配点 10%）'},
-  {id:'d1',name:'DE 1：データ移動',lead:'継続的な取り込み・データレイク・外部データ（配点 28%）'},
-  {id:'d2',name:'DE 2：パフォーマンス最適化',lead:'症状から原因と打ち手を選ぶ（配点 19%）'},
-  {id:'d3',name:'DE 3：ストレージとデータ保護',lead:'保持期間・クローン・レプリケーション（配点 14%）'},
-  {id:'d4',name:'DE 4：データガバナンス',lead:'ポリシーを大規模に運用する（配点 14%）'},
-  {id:'d5',name:'DE 5：データ変換',lead:'ストリーム・タスク・動的テーブル・Snowpark（配点 25%）'},
+  {id:'c1',exam:'core',name:'Core 1：機能とアーキテクチャ',lead:'3層構造・ウェアハウス・ストレージ・データの種類（配点 31%）'},
+  {id:'c2',exam:'core',name:'Core 2：アカウント管理とガバナンス',lead:'ロールと権限・認証・コスト管理・ポリシー（配点 20%）'},
+  {id:'c3',exam:'core',name:'Core 3：ロード・アンロード・接続',lead:'ステージ・COPY・Snowpipe・ドライバーとツール（配点 18%）'},
+  {id:'c4',exam:'core',name:'Core 4：パフォーマンス・クエリ・変換',lead:'キャッシュ・クエリプロファイル・最適化機能・変換（配点 21%）'},
+  {id:'c5',exam:'core',name:'Core 5：データコラボレーション',lead:'Time Travel・クローン・共有・リスティング（配点 10%）'},
+  {id:'d1',exam:'de',name:'DE 1：データ移動',lead:'継続的な取り込み・データレイク・外部データ（配点 28%）'},
+  {id:'d2',exam:'de',name:'DE 2：パフォーマンス最適化',lead:'症状から原因と打ち手を選ぶ（配点 19%）'},
+  {id:'d3',exam:'de',name:'DE 3：ストレージとデータ保護',lead:'保持期間・クローン・レプリケーション（配点 14%）'},
+  {id:'d4',exam:'de',name:'DE 4：データガバナンス',lead:'ポリシーを大規模に運用する（配点 14%）'},
+  {id:'d5',exam:'de',name:'DE 5：データ変換',lead:'ストリーム・タスク・動的テーブル・Snowpark（配点 25%）'},
+  {id:'a1',exam:'ara',name:'Architect 1：アカウントとセキュリティ',lead:'組織・アカウント・ロール、セキュリティとコンプライアンス（配点 25%）'},
+  {id:'a2',exam:'ara',name:'Architect 2：アーキテクチャ',lead:'データモデル・共有と提供・事業継続と開発環境（配点 30%）'},
+  {id:'a3',exam:'ara',name:'Architect 3：データエンジニアリング',lead:'取り込みから提供までのパイプライン全体（配点 25%）'},
+  {id:'a4',exam:'ara',name:'Architect 4：パフォーマンス最適化',lead:'ワークロードの分離・データの配置・監視とコストの配分（配点 20%）'},
 ];
 
 // [表示名, URL]
@@ -65,6 +73,7 @@ const SOURCES={
   cert:['Snowflake · SnowPro 認定の一覧（公式）','https://learn.snowflake.com/en/certifications/'],
   core:['SnowPro Core（COF-C03）認定ページ','https://learn.snowflake.com/en/certifications/snowpro-core-c03/'],
   dea:['SnowPro Advanced: Data Engineer（DEA-C02）認定ページ','https://learn.snowflake.com/en/certifications/snowpro-advanced-dataengineer-C02/'],
+  ara:['SnowPro Advanced: Architect（ARA-C01）認定ページ','https://learn.snowflake.com/en/certifications/snowpro-advanced-architect/'],
   docs:['Snowflake Documentation','https://docs.snowflake.com/'],
   quickstarts:['Snowflake Developer Guides（ハンズオン）','https://www.snowflake.com/en/developers/guides/'],
   arch:['Key concepts and architecture',D+'user-guide/intro-key-concepts'],
@@ -170,7 +179,7 @@ const FIELDS={
       ['Snowpark Container Services・Native Apps','アプリ（発展）','コンテナを Snowflake の中で動かしたり、アプリとして他のアカウントに配布したりします。','例：自社の分析アプリを、顧客のアカウントで動かせる形で配布する。'],
     ]},
   ],
-  after:`<section class="guide"><h3>この地図から、どう学ぶ？</h3><p><b>Core の準備：</b>第1〜15章で、すべての枝の基本を一周します。</p><p><b>Data Engineer の準備：</b>第16〜22章で、取り込み・性能・保護・ガバナンス・変換を、設計と運用の目線で深めます。</p><p><b>実際に触る：</b>無料トライアルで、ウェアハウスの作成・ロード・クローン・ストリームとタスクを一度ずつ試すと、記憶に残りやすくなります。</p></section>`,
+  after:`<section class="guide"><h3>この地図から、どう学ぶ？</h3><p><b>Core コース：</b>すべての枝の基本を一周します。</p><p><b>Data Engineer コース：</b>取り込み・性能・保護・ガバナンス・変換を、パイプラインの設計と運用の目線で深めます。</p><p><b>Architect コース：</b>アカウント構成・セキュリティ・データモデル・共有・事業継続・性能とコストを、全体の設計として組み立てます。</p><p><b>実際に触る：</b>無料トライアルで、ウェアハウスの作成・ロード・クローン・ストリームとタスクを一度ずつ試すと、記憶に残りやすくなります。</p></section>`,
   sources:['docs','arch','editions'],
 };
 
