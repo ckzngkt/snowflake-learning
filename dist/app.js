@@ -49,7 +49,7 @@ function nav(){
   if(useTracks())html+=`<div class="track-switch" role="group" aria-label="コースの切り替え">${EXAMS.map(e=>`<a href="#track-${e.id}" class="${e.id===t?'active':''}" ${e.id===t?'aria-current="true"':''}>${e.short}</a>`).join('')}</div>`;
   html+=`<a class="navitem ${active==='#home'?'active':''}" href="#home"><span class="num">⌂</span>${useTracks()?'ホーム（コース一覧）':'学習マップ'}</a>`;
   if(t)html+=`<a class="navitem ${active===`#track-${t}`?'active':''}" href="#track-${t}"><span class="num">▤</span>${trackInfo(t).title}の学習マップ</a>`;
-  html+=`<a class="navitem ${active==='#fields'?'active':''}" href="#fields"><span class="num">◇</span>${SITE.fieldsNav}</a>${hasExams()?`<a class="navitem ${active==='#exam'?'active':''}" href="#exam"><span class="num">✎</span>模擬試験</a>`:''}${hasLearn()?(()=>{const n=dueCount(t||'all');return `<a class="navitem ${active==='#review'?'active':''}" href="#review"><span class="num">↻</span>今日の復習${n?` <b class="due-badge">${n}</b>`:''}</a><a class="navitem ${active==='#progress'?'active':''}" href="#progress"><span class="num">▥</span>進捗</a><a class="navitem ${active==='#method'?'active':''}" href="#method"><span class="num">?</span>このサイトの学び方</a><a class="navitem ${active==='#settings'?'active':''}" href="#settings"><span class="num">⚙</span>同期と AI</a>`})():''}`;
+  html+=`<a class="navitem ${active==='#fields'?'active':''}" href="#fields"><span class="num">◇</span>${SITE.fieldsNav}</a>${hasExams()?`<a class="navitem ${active==='#exam'?'active':''}" href="#exam"><span class="num">✎</span>模擬試験</a>`:''}${hasLearn()?(()=>{const n=dueCount(t||'all');return `<a class="navitem ${active==='#review'?'active':''}" href="#review"><span class="num">↻</span>今日の復習${n?` <b class="due-badge">${n}</b>`:''}</a><a class="navitem ${active==='#progress'?'active':''}" href="#progress"><span class="num">▥</span>進捗</a><a class="navitem ${active==='#method'?'active':''}" href="#method"><span class="num">?</span>このサイトの学び方</a><a class="navitem ${active==='#settings'?'active':''}" href="#settings"><span class="num">⚙</span>${getSettings().session?'ログイン中（AI・同期）':'ログインと AI'}</a>`})():''}`;
   let hits=0;
   if(useTracks()&&!t&&!q)html+='<p class="empty">コースを選ぶと、そのコースの章が表示されます。</p>';
   AREAS.forEach(a=>{
@@ -313,7 +313,7 @@ function render(focus=false){
   const m=location.hash.match(/^#chapter-(\d+)$/);const i=m?Number(m[1])-1:-1;
   const tr=currentTrack();if(tr&&state.track!==tr){state.track=tr;save()}
   const tm=location.hash.match(/^#track-(\w+)$/);
-  const lp={'#review':['今日の復習',()=>reviewPage(),()=>initReview()],'#progress':['進捗',()=>progressPage(),()=>initProgress()],'#method':['このサイトの学び方',()=>methodPage(),()=>{}],'#settings':['同期と AI の設定',()=>settingsPage(),()=>initSettings()]}[location.hash];
+  const lp={'#review':['今日の復習',()=>reviewPage(),()=>initReview()],'#progress':['進捗',()=>progressPage(),()=>initProgress()],'#method':['このサイトの学び方',()=>methodPage(),()=>{}],'#settings':['ログインと AI',()=>settingsPage(),()=>initSettings()]}[location.hash];
   if(lp&&hasLearn()){$('#main').innerHTML=lp[1]();document.title=`${lp[0]}｜${SITE.name}`;lp[2]()}
   else if(tm&&useTracks()&&trackInfo(tm[1])){$('#main').innerHTML=trackHome(tm[1]);document.title=`${trackInfo(tm[1]).title}｜${SITE.name}`}
   else if(location.hash==='#exam'&&hasExams()){$('#main').innerHTML=examPage();document.title=`模擬試験｜${SITE.name}`;initExam()}

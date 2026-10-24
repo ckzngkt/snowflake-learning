@@ -1,7 +1,8 @@
 // 学習サイト共通：学習科学にもとづく学び方の仕組みと、同期・AI への質問。app.js より先に読み込む（関数は app.js から呼ぶ）。
 // 根拠：練習テストと分散学習（Dunlosky ら 2013、Donoghue & Hattie 2021）、連続再学習（Rawson & Dunlosky）、
 // 交互練習（Brunmair & Richter 2019）、事前の質問（Pan & Carpenter 2023）、確信度と誤りの修正（Butterfield & Metcalfe 2001）。
-// 同期と AI は、共通の API（study-api）を通す。合言葉はこのブラウザにだけ保存し、OpenAI の鍵はサーバー側にだけ置く。
+// 同期と AI は、共通の API（study-api）を通す。招待された人が Google でログインして使う（サイトを見るだけならログイン不要）。
+// ログインのセッションはこのブラウザにだけ保存し、OpenAI の鍵はサーバー側にだけ置く。
 const STUDY_API=/^(127\.0\.0\.1|localhost)$/.test(location.hostname)?'http://127.0.0.1:8787':'https://study-api.gakutoyashiro.workers.dev'; // 手元で試すときは、手元の API を使う
 const STUDY_SITES=[['学習ノート（ホーム）','https://study-home.gakutoyashiro.workers.dev/'],['Snowflake','https://snowflake-learning.gakutoyashiro.workers.dev/'],['データマネジメント','https://data-management.gakutoyashiro.workers.dev/'],['コンサルティングスキル','https://consulting-skills.gakutoyashiro.workers.dev/'],['プロジェクトマネジメント','https://project-management.gakutoyashiro.workers.dev/']];
 const BOX_DAYS=[1,3,7,14,30,60]; // 復習の間隔（日）。正解して自信があれば次の箱へ、間違えたら最初の箱へ
@@ -141,10 +142,10 @@ function getSettings(){try{return JSON.parse(localStorage.getItem(SETTINGS_KEY))
 function setSettings(s){try{localStorage.setItem(SETTINGS_KEY,JSON.stringify(s))}catch(e){}}
 const siteId=()=>SITE.key.replace(/-v\d+$/,'');
 let syncTimer=null,syncInfo={state:'off',at:null,msg:''};
-function syncStatusText(){const s=getSettings();if(!s.token)return ' 進み具合は、このブラウザだけに保存しています（<a href="#settings">同期を設定</a>）。';return syncInfo.state==='ok'?` 同期済み（${new Date(syncInfo.at).toLocaleTimeString('ja-JP')}）。`:syncInfo.state==='error'?` 同期できませんでした：${esc(syncInfo.msg)}`:' 同期の準備中です。'}
-async function api(path,opt={}){const s=getSettings();if(!s.token)throw new Error('合言葉が設定されていません');
-  const r=await fetch(STUDY_API+path,{...opt,headers:{'Content-Type':'application/json','Authorization':'Bearer '+s.token,...(opt.headers||{})}});
-  const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||`HTTP ${r.status}`);return j}
+function syncStatusText(){const s=getSettings();if(!s.session)return ' 進み具合は、このブラウザだけに保存しています（<a href="#settings">ログインすると、ほかの端末と同期できます</a>）。';return syncInfo.state==='ok'?` 同期済み（${new Date(syncInfo.at).toLocaleTimeString('ja-JP')}）。`:syncInfo.state==='error'?` 同期できませんでした：${esc(syncInfo.msg)}`:' 同期の準備中です。'}
+async function api(path,opt={},auth=true){const s=getSettings();if(auth&&!s.session)throw new Error('ログインしていません');
+  const r=await fetch(STUDY_API+path,{...opt,headers:{'Content-Type':'application/json',...(auth?{'Authorization':'Bearer '+s.session}:{}),...(opt.headers||{})}});
+  const j=await r.json().catch(()=>({}));if(r.status===401&&auth){setSettings({});syncInfo={state:'off'}}if(!r.ok)throw new Error(j.error||`HTTP ${r.status}`);return j}
 // 2台の記録をまとめる：項目ごとに、新しく更新したほうを残す
 function mergeState(a,b){
   const out={...a};const later=(ta,tb)=>(tb||0)>(ta||0);
@@ -165,44 +166,63 @@ function mergeState(a,b){
   return out;
 }
 async function syncNow(){
-  if(!getSettings().token){syncInfo={state:'off'};return}
+  if(!getSettings().session){syncInfo={state:'off'};return}
   try{const r=await api('/progress/'+siteId());if(r.data){const merged=mergeState(state,r.data);state=merged;ensureLearnState();try{localStorage.setItem(SITE.key,JSON.stringify(state))}catch(e){}}
     await api('/progress/'+siteId(),{method:'PUT',body:JSON.stringify({data:state})});syncInfo={state:'ok',at:Date.now()};
   }catch(e){syncInfo={state:'error',msg:e.message}}
   updateSyncBadge();
 }
-function queueSync(){if(!getSettings().token)return;clearTimeout(syncTimer);syncTimer=setTimeout(syncNow,2500)}
+function queueSync(){if(!getSettings().session)return;clearTimeout(syncTimer);syncTimer=setTimeout(syncNow,2500)}
 function updateSyncBadge(){const el=$('#sync-badge');if(el)el.innerHTML=syncStatusText()}
 
-// ---------- 設定（合言葉・同期・書き出し） ----------
+// ---------- ログイン・同期・書き出し（設定のページ） ----------
+// サイトを見る・問題を解く・復習する・進捗を見るのは、ログインなしでできる（記録はこのブラウザに保存）。
+// ログインすると、AI への質問と、ほかの端末との同期が使える。
+let gisLoaded=null;
+function loadGoogle(){if(gisLoaded)return gisLoaded;gisLoaded=new Promise((ok,ng)=>{const sc=document.createElement('script');sc.src='https://accounts.google.com/gsi/client?hl=ja';sc.async=true;sc.onload=ok;sc.onerror=()=>ng(new Error('Google のログインを読み込めませんでした'));document.head.appendChild(sc)});return gisLoaded}
 function settingsPage(){
   const s=getSettings();
-  return `<article class="lesson"><div class="lesson-nav"><a href="#home">ホーム</a> / 同期と AI の設定</div><p class="eyebrow">SETTINGS</p><h1>同期と AI の設定</h1>
-<p class="summary">合言葉を設定すると、PC とスマホで進み具合を同期し、各章で AI に質問できます。合言葉はこのブラウザにだけ保存されます。</p>
-<div class="lab"><span class="lab-heading">PASSPHRASE</span><h3>合言葉</h3><label for="st-token">Cloudflare の study-api に設定した合言葉（ACCESS_TOKEN）</label><input id="st-token" type="password" autocomplete="off" value="${s.token?'••••••••••••':''}" placeholder="合言葉を入力">
-<div class="lab-actions"><button class="primary" id="st-save">保存して接続を確かめる</button><button id="st-clear">このブラウザから消す</button><span id="st-msg" role="status"></span></div>
-<p class="muted" style="font-size:12px">ほかの学習サイトは別々のサイトなので、合言葉もサイトごとに保存します。保存したあと、下のリンクから開くと、同じ合言葉が自動で設定されます（合言葉は URL の # 以降に入り、サーバーには送られません）。</p><div id="st-links"></div></div>
-<div class="lab"><span class="lab-heading">SYNC</span><h3>同期</h3><p id="sync-badge">${syncStatusText()}</p><div class="lab-actions"><button id="st-sync">今すぐ同期</button></div></div>
-<div class="lab"><span class="lab-heading">BACKUP</span><h3>記録の書き出しと読み込み</h3><p>同期を使わない場合や、念のための控えに使います。</p><div class="lab-actions"><button id="st-export">書き出す（JSON をコピー）</button><button id="st-import">読み込む（貼り付けた JSON とまとめる）</button></div><textarea id="st-json" rows="4" style="width:100%;margin-top:8px" placeholder="読み込むときは、ここに JSON を貼り付けてください"></textarea><span id="st-io" role="status"></span></div>
+  return `<article class="lesson"><div class="lesson-nav"><a href="#home">ホーム</a> / ログインと AI</div><p class="eyebrow">ACCOUNT</p><h1>ログインと AI</h1>
+<p class="summary">サイトの章・問題・復習・進捗は、ログインしなくても使えます（記録はこのブラウザに保存）。招待された人は、Google でログインすると、<b>AI への質問</b>と、<b>PC とスマホの進み具合の同期</b>が使えます。</p>
+<div class="lab"><span class="lab-heading">ACCOUNT</span>${s.session?`<h3>ログイン中</h3><p>${esc(s.name||'')}（${esc(s.email||'')}）${s.admin?' · 管理者':''}</p><p id="me-usage" class="muted" style="font-size:12px"></p><div class="lab-actions"><button id="st-logout">ログアウト</button></div>`:`<h3>Google でログイン</h3><div id="g-btn" style="min-height:44px"></div><p id="st-msg" role="status" class="muted" style="font-size:12px"></p><p class="muted" style="font-size:12px">招待されていないアカウントではログインできません。使いたい場合は、管理者に招待を頼んでください。</p>`}</div>
+${s.session?`<div class="lab"><span class="lab-heading">SYNC</span><h3>同期</h3><p id="sync-badge">${syncStatusText()}</p><div class="lab-actions"><button id="st-sync">今すぐ同期</button></div><p class="muted" style="font-size:12px">学習サイトはサイトごとに別々なので、ほかのサイトでも一度ずつ Google でログインしてください。</p></div>`:''}
+${s.session&&s.admin?`<div class="lab" id="admin"><span class="lab-heading">ADMIN</span><h3>招待と利用状況</h3><p class="muted" style="font-size:12px">招待したメールアドレスの人だけが、Google でログインして AI と同期を使えます。</p><div class="lab-actions"><input id="ad-email" type="email" placeholder="招待するメールアドレス" style="max-width:320px"><button class="primary" id="ad-add">招待する</button><span id="ad-msg" role="status"></span></div><div id="ad-list"><p class="muted">読み込み中…</p></div></div>`:''}
+<div class="lab"><span class="lab-heading">BACKUP</span><h3>記録の書き出しと読み込み</h3><p>ログインしない場合に、端末を移るときや、念のための控えに使います。</p><div class="lab-actions"><button id="st-export">書き出す（JSON をコピー）</button><button id="st-import">読み込む（貼り付けた JSON とまとめる）</button></div><textarea id="st-json" rows="4" style="width:100%;margin-top:8px" placeholder="読み込むときは、ここに JSON を貼り付けてください"></textarea><span id="st-io" role="status"></span></div>
+<div class="sources"><b>ログインしたときに保存するもの</b><p>Google アカウントのメールアドレスと名前、各サイトの進み具合（章の完了・復習の記録・メモ）、AI の1日の利用回数です。AI への質問の文章はサーバーに保存しませんが、答えを作るために、章の内容とともに OpenAI に送られます。ログアウトすると、この端末のログインは消えます。記録の削除を希望するときは、管理者に連絡してください。</p></div>
 </article>`;
 }
-function siteLinks(token){return STUDY_SITES.filter(([,u])=>!location.href.startsWith(u)).map(([n,u])=>`<a href="${u}#connect=${encodeURIComponent(token)}" target="_blank" rel="noopener">${n} にも設定する ↗</a>`).join('<br>')}
-function initSettings(){
-  const s=getSettings();if(s.token)$('#st-links').innerHTML=siteLinks(s.token);
-  $('#st-save').onclick=async()=>{const v=$('#st-token').value.trim();if(!v||v.startsWith('••')){$('#st-msg').textContent='合言葉を入力してください。';return}
-    setSettings({...getSettings(),token:v});$('#st-msg').textContent='確かめています…';
-    try{const h=await api('/health');$('#st-msg').textContent=`接続できました${h.ai?'（AI も利用できます）':'（AI の鍵は未設定です）'}。`;$('#st-links').innerHTML=siteLinks(v);syncNow()}catch(e){$('#st-msg').textContent='接続できません：'+e.message}};
-  $('#st-clear').onclick=()=>{setSettings({});$('#st-token').value='';$('#st-links').innerHTML='';$('#st-msg').textContent='このブラウザから消しました。';syncInfo={state:'off'}};
-  $('#st-sync').onclick=syncNow;
+async function initSettings(){
+  const s=getSettings();
   $('#st-export').onclick=()=>copyText(JSON.stringify(state),$('#st-io'));
   $('#st-import').onclick=()=>{try{const b=JSON.parse($('#st-json').value);state=mergeState(state,b);ensureLearnState();save();$('#st-io').textContent='読み込んで、今の記録とまとめました。';nav()}catch(e){$('#st-io').textContent='JSON として読めませんでした。'}};
+  if(!s.session){
+    try{const cfg=await api('/config',{},false);if(!cfg.googleClientId){$('#st-msg').textContent='ログインの準備中です（管理者が設定を終えると使えます）。';return}
+      await loadGoogle();
+      google.accounts.id.initialize({client_id:cfg.googleClientId,callback:async res=>{$('#st-msg').textContent='確かめています…';
+        try{const r=await api('/auth/google',{method:'POST',body:JSON.stringify({credential:res.credential})},false);setSettings({session:r.token,email:r.email,name:r.name,admin:r.admin});await syncNow();render()}
+        catch(e){$('#st-msg').textContent='ログインできませんでした：'+e.message}}});
+      google.accounts.id.renderButton($('#g-btn'),{theme:'outline',size:'large',text:'signin_with',locale:'ja'});
+    }catch(e){$('#st-msg').textContent='ログインの準備ができませんでした：'+e.message}
+    return;
+  }
+  $('#st-logout').onclick=async()=>{try{await api('/logout',{method:'POST'})}catch(e){}setSettings({});syncInfo={state:'off'};render()};
+  $('#st-sync').onclick=syncNow;
+  api('/me').then(me=>{$('#me-usage').textContent=`今日の AI の質問：${me.usedToday} / ${me.admin?'上限なし（管理者）':me.limit+'回'}${me.ai?'':' · AI の鍵が未設定です'}`}).catch(e=>{$('#me-usage').textContent=e.message});
+  if(s.admin)loadAdmin();
 }
-function consumeConnectHash(){const m=location.hash.match(/^#connect=(.+)$/);if(!m)return;setSettings({...getSettings(),token:decodeURIComponent(m[1])});history.replaceState(null,'','#settings')}
+async function loadAdmin(){
+  const box=$('#ad-list');if(!box)return;
+  try{const r=await api('/admin/users');
+    box.innerHTML=`<p class="muted" style="font-size:12px">今日の AI の質問：全体 ${r.todayTotal} / ${r.limits.global}回（1人 ${r.limits.perUser}回まで）· 管理者：${r.admins.map(esc).join('、')}</p>`+(r.allow.length?table(['メールアドレス','名前','最後に使った日','今日の AI',''],r.allow.map(u=>[esc(u.email),esc(u.name||'（未ログイン）'),u.last_seen?new Date(u.last_seen).toLocaleDateString('ja-JP'):'—',`${u.today}回`,`<button data-remove="${esc(u.email)}">招待を取り消す</button>`])):'<p class="muted">まだ誰も招待していません。</p>');
+    $$('[data-remove]',box).forEach(b=>b.onclick=async()=>{if(!confirm(`${b.dataset.remove} の招待を取り消しますか？（その人はログインできなくなります）`))return;await api('/admin/allow/'+encodeURIComponent(b.dataset.remove),{method:'DELETE'});loadAdmin()});
+  }catch(e){box.innerHTML=`<p class="muted">読み込めませんでした：${esc(e.message)}</p>`}
+  $('#ad-add').onclick=async()=>{const v=$('#ad-email').value.trim();if(!v)return;try{await api('/admin/allow',{method:'POST',body:JSON.stringify({email:v})});$('#ad-email').value='';$('#ad-msg').textContent='招待しました。その人に、サイトの「ログインと AI」から Google でログインするよう伝えてください。';loadAdmin()}catch(e){$('#ad-msg').textContent=e.message}};
+}
 
 // ---------- AI に質問 ----------
 function lessonContext(i){const l=LESSONS[i];return plain([`章：${l.title}`,`要約：${l.summary}`,`ゴール：${l.goal}`,...l.sections.map(([t,b])=>`【${t}】${b}`),`まとめ：${l.takeaways.join(' / ')}`].join('\n')).replace(/[ \t]+/g,' ').slice(0,9000)}
 function aiInline(i,preset=''){
-  return `<div class="ai-box" data-ai-chapter="${i}"><b>AI に質問する</b>${getSettings().token?'':`<p class="muted" style="font-size:12px;margin:4px 0">使うには、<a href="#settings">同期と AI の設定</a>で合言葉を設定してください。</p>`}
+  return `<div class="ai-box" data-ai-chapter="${i}"><b>AI に質問する</b>${getSettings().session?'':`<p class="muted" style="font-size:12px;margin:4px 0">使うには、<a href="#settings">ログイン</a>してください（招待された人だけが使えます）。</p>`}
 <div class="ai-chips">${['この章を、たとえ話で説明して','具体例をもう1つ挙げて','試験で間違えやすい点は？','私の理解を確かめて：'].map(c=>`<button type="button" data-chip="${esc(c)}">${c}</button>`).join('')}</div>
 <textarea data-ai-q rows="3" maxlength="2000" placeholder="分からないところや、自分の説明が合っているかを聞いてみましょう">${esc(preset)}</textarea><div class="lab-actions"><button class="primary" data-ai-send>質問する</button><span class="muted" style="font-size:11px">章の本文を添えて送ります。答えは誤ることがあるので、大事な点は公式の資料で確認してください。</span></div><div class="ai-log" aria-live="polite"></div></div>`;
 }
