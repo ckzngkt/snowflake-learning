@@ -325,3 +325,36 @@ footer{border-top:1px solid var(--line);padding:24px 38px;display:flex;justify-c
 .track-card .go{margin-top:12px;font-weight:700;color:var(--accent);font-size:13px}
 @media(max-width:1050px){.track-cards{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:720px){.track-switch{margin:10px 0 0}}
+
+/* 学び方の仕組み：今日やること・予想・思い出す・復習・AI・進捗（2026-10-24 追加） */
+.today{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;border:1px solid var(--tint-2);background:var(--tint-3);border-left:4px solid var(--accent);border-radius:10px;padding:14px 18px;margin:0 0 26px}
+.today b{display:block;font-size:14px}
+.today span{font-size:12.5px;color:var(--muted)}
+.today-actions{display:flex;gap:8px;flex-wrap:wrap}
+.today-actions .primary{padding:7px 14px;font-size:13px}
+.due-badge{display:inline-block;min-width:18px;padding:0 6px;border-radius:10px;background:var(--accent);color:#fff;font-size:10px;text-align:center;font-weight:700}
+.pretest{border:1px dashed var(--tint-2);background:var(--tint-3);border-radius:10px;padding:16px 20px;margin:22px 0}
+.pretest h3{margin:0 0 4px;font-size:15px}
+.pretest>p{font-size:12.5px;color:var(--muted);margin:0 0 10px}
+.pretest .qitem p{font-size:13px}
+.pretest button.answer{display:block;width:100%;text-align:left;margin:6px 0;font-size:13px}
+.pretest button.selected{border-color:var(--accent);background:var(--tint)}
+.pretest button.correct{background:var(--ok-bg);border-color:var(--accent)}
+.pretest button.wrong{background:var(--ng-bg);border-color:var(--ng)}
+.pretest .check-multi{display:inline-block;width:auto;background:var(--accent);color:#fff;border-color:var(--accent)}
+.recall textarea{width:100%;min-height:90px;padding:10px 12px;border:1px solid var(--line);background:var(--field);border-radius:7px;font-size:13px;margin:6px 0}
+.recall ul{margin-top:10px}
+.conf-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px;font-size:12.5px}
+.conf-row button{width:auto!important;display:inline-block!important;margin:0!important}
+.review-card .lab-actions a{font-size:13px}
+.ai-box{border:1px solid var(--tint-2);border-radius:10px;padding:16px 18px;margin:24px 0;background:var(--panel)}
+.ai-box>b{display:block;font-size:14px;margin-bottom:6px}
+.ai-chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.ai-chips button{font-size:11px;padding:4px 10px;border-radius:20px}
+.ai-box textarea{width:100%;padding:10px 12px;border:1px solid var(--line);background:var(--field);border-radius:7px;font-size:13px}
+.ai-log{margin-top:10px}
+.ai-q{font-size:12.5px;font-weight:600;margin:12px 0 4px;white-space:pre-wrap}
+.ai-a{font-size:13px;white-space:pre-wrap;background:var(--tint-3);border-left:3px solid var(--accent);padding:10px 12px;border-radius:0 6px 6px 0}
+.heat{display:grid;grid-template-columns:repeat(14,minmax(0,1fr));gap:4px;max-width:420px;margin:8px 0}
+.heat span{aspect-ratio:1;border-radius:3px;display:block}
+@media print{.today,.pretest,.ai-box,.conf-row{display:none!important}}

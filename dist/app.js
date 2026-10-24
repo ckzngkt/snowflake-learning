@@ -15,7 +15,8 @@ function loadState(){
     state.done=Object.keys(o.done).filter(k=>o.done[k]).map(k=>Number(k)-1).filter(i=>i>=0&&i<LESSONS.length);
     Object.entries(o.memo||{}).forEach(([k,v])=>{state.answers[Number(k)-1]=v});save()}}catch(e){}
 }
-function save(){try{localStorage.setItem(SITE.key,JSON.stringify(state));return true}catch(e){return false}}
+function save(){state.updatedAt=Date.now();let ok=true;try{localStorage.setItem(SITE.key,JSON.stringify(state))}catch(e){ok=false}if(typeof queueSync==='function')queueSync();return ok}
+const hasLearn=()=>typeof srsSeen==='function';
 
 // ---------- 本文で使う部品 ----------
 const bars=(labels,values,max=1,opts={})=>`<div class="bars">${labels.map((l,i)=>`<div class="barrow"><span>${l}</span><div class="bartrack"><div class="barfill ${(opts.crit||[]).includes(i)?'crit':''}" style="width:${Math.max(0,Math.min(100,values[i]/max*100))}%"></div></div><span>${opts.fmt?opts.fmt(values[i]):values[i]}</span></div>`).join('')}</div>`;
@@ -48,7 +49,7 @@ function nav(){
   if(useTracks())html+=`<div class="track-switch" role="group" aria-label="コースの切り替え">${EXAMS.map(e=>`<a href="#track-${e.id}" class="${e.id===t?'active':''}" ${e.id===t?'aria-current="true"':''}>${e.short}</a>`).join('')}</div>`;
   html+=`<a class="navitem ${active==='#home'?'active':''}" href="#home"><span class="num">⌂</span>${useTracks()?'ホーム（コース一覧）':'学習マップ'}</a>`;
   if(t)html+=`<a class="navitem ${active===`#track-${t}`?'active':''}" href="#track-${t}"><span class="num">▤</span>${trackInfo(t).title}の学習マップ</a>`;
-  html+=`<a class="navitem ${active==='#fields'?'active':''}" href="#fields"><span class="num">◇</span>${SITE.fieldsNav}</a>${hasExams()?`<a class="navitem ${active==='#exam'?'active':''}" href="#exam"><span class="num">✎</span>模擬試験</a>`:''}`;
+  html+=`<a class="navitem ${active==='#fields'?'active':''}" href="#fields"><span class="num">◇</span>${SITE.fieldsNav}</a>${hasExams()?`<a class="navitem ${active==='#exam'?'active':''}" href="#exam"><span class="num">✎</span>模擬試験</a>`:''}${hasLearn()?(()=>{const n=dueCount(t||'all');return `<a class="navitem ${active==='#review'?'active':''}" href="#review"><span class="num">↻</span>今日の復習${n?` <b class="due-badge">${n}</b>`:''}</a><a class="navitem ${active==='#progress'?'active':''}" href="#progress"><span class="num">▥</span>進捗</a><a class="navitem ${active==='#method'?'active':''}" href="#method"><span class="num">?</span>このサイトの学び方</a><a class="navitem ${active==='#settings'?'active':''}" href="#settings"><span class="num">⚙</span>同期と AI</a>`})():''}`;
   let hits=0;
   if(useTracks()&&!t&&!q)html+='<p class="empty">コースを選ぶと、そのコースの章が表示されます。</p>';
   AREAS.forEach(a=>{
@@ -75,6 +76,7 @@ function home(){
   const planned=AREAS.reduce((n,a)=>n+(a.planned||[]).length,0);
   return `<div class="home"><div class="hero"><div><p class="eyebrow">${SITE.eyebrow}</p><h1>${SITE.heroTitle}</h1><p class="lead">${SITE.lead}</p><a class="primary" href="#chapter-${start+1}">${state.done.length?`続きから：第${start+1}章`:'第1章から始める'} <span aria-hidden="true">↗</span></a></div><div class="hero-visual" aria-label="${esc(SITE.heroLabel)}">${SITE.heroVisual}</div></div>
 <div class="facts">${SITE.facts.map(([b,s])=>`<div><b>${b}</b><span>${s}</span></div>`).join('')}</div>
+${hasLearn()?todayPanel(null):''}
 <a class="field-teaser" href="#fields"><span>${SITE.teaser[0]}</span><b>${SITE.teaser[1]}</b><small>${SITE.teaser[2]} →</small></a>
 ${SITE.homeExtra||''}
 <div class="sectionhead"><h2>学習マップ</h2><small>${planned?`公開 ${LESSONS.length}章 · 準備中 ${planned}章`:`全${LESSONS.length}章を${AREAS.length}つの段階に分けています。`}</small></div>
@@ -90,6 +92,7 @@ function phasesHtml(areas){
 function tracksHome(){
   return `<div class="home"><div class="hero"><div><p class="eyebrow">${SITE.eyebrow}</p><h1>${SITE.heroTitle}</h1><p class="lead">${SITE.lead}</p><a class="primary" href="#track-${state.track&&trackInfo(state.track)?state.track:EXAMS[0].id}">${state.track&&trackInfo(state.track)?`続きから：${trackInfo(state.track).title}`:`${EXAMS[0].title}から始める`} <span aria-hidden="true">↗</span></a></div><div class="hero-visual" aria-label="${esc(SITE.heroLabel)}">${SITE.heroVisual}</div></div>
 <div class="facts">${SITE.facts.map(([b,s])=>`<div><b>${b}</b><span>${s}</span></div>`).join('')}</div>
+${hasLearn()?todayPanel(null):''}
 <div class="sectionhead"><h2>コースを選ぶ</h2><small>資格ごとに分かれています</small></div><p class="lead" style="max-width:none;margin:-8px 0 16px">${SITE.trackIntro||''}</p>
 <div class="track-cards">${EXAMS.map(e=>{const ls=trackLessons(e.id),d=ls.filter(i=>state.done.includes(i)).length,q=ls.reduce((n,i)=>n+LESSONS[i].quiz.length,0);return `<a class="track-card" href="#track-${e.id}"><span class="index">${e.name}</span><h3>${e.title}</h3><p>${e.lead}</p><ul><li>${ls.length}章 · 練習問題 ${q}問</li><li>${e.info[0][1]} · ${e.info[3][1]}</li><li>前提：${e.info[4][1]}</li></ul><div class="track-progress"><progress max="${ls.length}" value="${d}"></progress><small>${d} / ${ls.length} 章 完了</small></div><span class="go">コースを開く →</span></a>`}).join('')}</div>
 <a class="field-teaser" href="#fields"><span>${SITE.teaser[0]}</span><b>${SITE.teaser[1]}</b><small>${SITE.teaser[2]} →</small></a>
@@ -101,6 +104,7 @@ function trackHome(t){
   const count=d=>ls.filter(i=>LESSONS[i].domain===d).length;
   return `<div class="home"><div class="lesson-nav"><a href="#home">ホーム</a> / ${e.title}</div><p class="eyebrow">${e.name}</p><h1>${e.title}</h1><p class="lead" style="max-width:760px">${e.lead}</p>
 <p style="margin-top:18px;display:flex;gap:12px;flex-wrap:wrap"><a class="primary" href="#chapter-${start+1}">${ls.some(i=>state.done.includes(i))?`続きから：第${chapterNo(start)}章`:'第1章から始める'} <span aria-hidden="true">↗</span></a><a class="home-link" href="#exam" style="padding:10px 18px">このコースの模擬試験 →</a></p>
+${hasLearn()?todayPanel(t):''}
 <div class="sectionhead"><h2>試験の概要</h2><small>公式の認定ページで確認（2026-10-24）</small></div>
 ${table(['項目','内容'],e.info)}
 ${table(['領域','配点','このコースの章'],e.domains.map(([d,n,w])=>[`${d} ${n}`,`${w}%`,`${count(d)}章`]))}
@@ -206,16 +210,16 @@ function markQuiz(item,[, ,a,why],extra=''){
   $$('.answer',item).forEach(b=>{const j=Number(b.dataset.answer);b.classList.toggle('correct',correct.includes(j)&&(ok||sel.includes(j)||extra!==''));b.classList.toggle('wrong',sel.includes(j)&&!correct.includes(j))});
   return ok;
 }
-function bindQuizItem(item,q,mode='practice'){
+function bindQuizItem(item,q,mode='practice',onAnswer=null){
   const multi=isMulti(q[2]);
   $$('.answer',item).forEach(btn=>btn.onclick=()=>{
     if(!multi)$$('.answer',item).forEach(b=>{b.classList.remove('selected');b.setAttribute('aria-pressed','false')});
     btn.classList.toggle('selected',multi?undefined:true);btn.setAttribute('aria-pressed',btn.classList.contains('selected'));
-    if(mode==='practice'&&!multi){const ok=markQuiz(item,q);$('.feedback',item).textContent=ok?'正解です。'+q[3]:'もう一度考えてみましょう。'}
+    if(mode==='practice'&&!multi){const ok=markQuiz(item,q);$('.feedback',item).textContent=ok?'正解です。'+q[3]:'もう一度考えてみましょう。';if(onAnswer)onAnswer(ok)}
   });
   const check=$('.check-multi',item);
   if(check)check.onclick=()=>{const sel=selectedOf(item);if(!sel.length){$('.feedback',item).textContent=`${q[2].length}つ選んでから回答してください。`;return}
-    const ok=markQuiz(item,q);$('.feedback',item).textContent=ok?'正解です。'+q[3]:`もう一度考えてみましょう（正解は${q[2].length}つです）。`};
+    const ok=markQuiz(item,q);$('.feedback',item).textContent=ok?'正解です。'+q[3]:`もう一度考えてみましょう（正解は${q[2].length}つです）。`;if(onAnswer)onAnswer(ok)};
 }
 
 // ---------- 模擬試験（content.js に EXAMS があるサイトだけ） ----------
@@ -262,22 +266,26 @@ function lesson(i,print=false){
   return `<article class="lesson" data-chapter="${i}"><div class="lesson-nav"><a href="${map}">${t?trackInfo(t).title:'学習マップ'}</a> / ${area.name} / 第${chapterNo(i)}章</div>
 <p class="eyebrow">${t?trackInfo(t).short.toUpperCase()+' · ':''}CHAPTER ${pad(chapterNo(i))} / ${pad(list.length)} · 学習時間の目安 ${l.time}分</p><h1>${l.title}</h1><p class="summary">${l.summary}</p><div class="tags">${ex?`<span class="tag-exam">${ex.short} · 領域 ${l.domain} ${ex.domains.find(d=>d[0]===l.domain)[1]}</span>`:''}${l.tags.map(t=>`<span>${t}</span>`).join('')}</div>
 <div class="objectives"><b>この章のゴール</b><p>${l.goal}</p></div>
+${!print&&hasLearn()?`<section class="pretest"><h3>読む前に、予想してみる</h3><p>答えを知らなくて大丈夫です。先に予想してから読むと、本文の中で答えを探しながら読めるので、記憶に残りやすくなります。</p>${l.quiz.slice(0,2).map((q,k)=>quizItem(q,k,{label:`予想${k+1}`})).join('')}</section>`:''}
 ${l.sections.map(([t,b],j)=>`<section><h2><span class="secnum">${pad(j+1)}</span>${t}</h2>${b}</section>`).join('')}
 ${labsOf(l,i).map((lab,k)=>`<div class="lab" data-lab="${k}"><span class="lab-heading">TRY IT YOURSELF${labsOf(l,i).length>1?` · ${k+1}`:''}</span>${labMarkup(lab,print)}</div>`).join('')}
 <div class="quiz"><h3>理解チェック</h3>${l.quiz.map((q,k)=>quizItem(q,k,{print})).join('')}</div>
 <section class="exercise"><h3>自分の手で考える</h3>${l.exercise.map((e,k)=>`<div class="ex"><p>${k+1}. ${e.q}</p>${print?'':`<textarea data-answer-box="${k}" aria-label="演習${k+1}の自分の答え" placeholder="自分の答えを書いてみましょう（このブラウザに保存されます）">${esc(ans[k]||'')}</textarea>`}<details ${print?'open':''}><summary>解答の例を見る</summary><p>${e.a}</p></details></div>`).join('')}</section>
-<div class="takeaways"><h3>この章のまとめ</h3><ul>${l.takeaways.map(t=>`<li>${t}</li>`).join('')}</ul></div>
-${print?'':`<div class="memo"><label for="memo">学習メモ</label><textarea id="memo" placeholder="今日理解したこと、まだ疑問なこと、自分の言葉での説明…">${esc(state.notes[i]||'')}</textarea><small id="memo-status" aria-live="polite">このブラウザ内だけに保存します。別端末には同期されません。</small></div>
+${print||!hasLearn()?`<div class="takeaways"><h3>この章のまとめ</h3><ul>${l.takeaways.map(t=>`<li>${t}</li>`).join('')}</ul></div>`:`<div class="takeaways recall"><h3>何も見ずに、思い出してみる</h3><p>この章の要点を、本文を見ずに書き出してみましょう（3つが目安）。思い出す練習そのものが、記憶を強くします。</p><textarea data-recall rows="4" placeholder="例：〇〇は△△のための仕組み。□□のときに使う…">${esc((state.recall||{})[i]||'')}</textarea><div class="lab-actions"><button data-reveal-take>書けたら、まとめと比べる</button></div><ul data-take ${(state.recallSeen||{})[i]?'':'hidden'}>${l.takeaways.map(t=>`<li>${t}</li>`).join('')}</ul></div>`}
+${print?'':`<div class="memo"><label for="memo">学習メモ</label><textarea id="memo" placeholder="今日理解したこと、まだ疑問なこと、自分の言葉での説明…">${esc(state.notes[i]||'')}</textarea><small id="memo-status" aria-live="polite">このブラウザに保存します（同期を設定すると、ほかの端末にも反映）。</small></div>
+${hasLearn()?aiInline(i):''}
 <div class="lesson-bottom"><a href="${prev!==undefined?`#chapter-${prev+1}`:map}">← ${prev!==undefined?'前の章':'学習マップ'}</a><button class="primary" id="complete">${state.done.includes(i)?'✓ 完了済み（取り消す）':'この章を完了にする'}</button><a href="${next!==undefined?`#chapter-${next+1}`:map}">${next!==undefined?'次の章':t?'コースの学習マップ':'学習マップ'} →</a></div>`}
 <div class="sources"><b>参考資料</b>${sourceLinks(l.sources)}</div></article>`;
 }
 function bindLesson(i){
   const l=LESSONS[i];
   labsOf(l,i).forEach((lab,k)=>initLab(lab,$(`.lab[data-lab="${k}"]`)));
-  $$('.qitem').forEach(item=>bindQuizItem(item,l.quiz[item.dataset.q]));
-  $$('[data-answer-box]').forEach(t=>t.oninput=()=>{state.answers[i]=state.answers[i]||{};state.answers[i][t.dataset.answerBox]=t.value;save()});
-  $('#memo').oninput=()=>{state.notes[i]=$('#memo').value;$('#memo-status').textContent=save()?'メモをこのブラウザに保存しました。':'保存できません。メモをコピーして手元に残してください。'};
-  $('#complete').onclick=()=>{state.done=state.done.includes(i)?state.done.filter(v=>v!==i):[...state.done,i];const ok=save();nav();
+  $$('.pretest .qitem').forEach(item=>bindQuizItem(item,l.quiz[item.dataset.q]));
+  $$('.quiz .qitem').forEach(item=>{const k=Number(item.dataset.q);bindQuizItem(item,l.quiz[k],'practice',ok=>{if(hasLearn())srsSeen(i,k,ok)})});
+  if(hasLearn()){const ta=$('[data-recall]');if(ta){ta.oninput=()=>{state.recall[i]=ta.value;state.textT['recall:'+i]=Date.now();save()};$('[data-reveal-take]').onclick=()=>{$('[data-take]').hidden=false;state.recallSeen[i]=1;markActivity();save()}}bindAiInline($('#main'))}
+  $$('[data-answer-box]').forEach(t=>t.oninput=()=>{state.answers[i]=state.answers[i]||{};state.answers[i][t.dataset.answerBox]=t.value;state.textT=state.textT||{};state.textT['answers:'+i]=Date.now();save()});
+  $('#memo').oninput=()=>{state.notes[i]=$('#memo').value;state.textT=state.textT||{};state.textT['notes:'+i]=Date.now();$('#memo-status').textContent=save()?'メモをこのブラウザに保存しました。':'保存できません。メモをコピーして手元に残してください。'};
+  $('#complete').onclick=()=>{state.done=state.done.includes(i)?state.done.filter(v=>v!==i):[...state.done,i];state.doneT=state.doneT||{};state.doneT[i]=Date.now();if(hasLearn()&&state.done.includes(i)){srsAddChapter(i);markActivity()}const ok=save();nav();
     $('#complete').textContent=state.done.includes(i)?'✓ 完了済み（取り消す）':'この章を完了にする';
     if(!ok)$('#memo-status').textContent='ブラウザ保存が使えないため、再読込すると進捗が消えます。'};
 }
@@ -305,17 +313,21 @@ function render(focus=false){
   const m=location.hash.match(/^#chapter-(\d+)$/);const i=m?Number(m[1])-1:-1;
   const tr=currentTrack();if(tr&&state.track!==tr){state.track=tr;save()}
   const tm=location.hash.match(/^#track-(\w+)$/);
-  if(tm&&useTracks()&&trackInfo(tm[1])){$('#main').innerHTML=trackHome(tm[1]);document.title=`${trackInfo(tm[1]).title}｜${SITE.name}`}
+  const lp={'#review':['今日の復習',()=>reviewPage(),()=>initReview()],'#progress':['進捗',()=>progressPage(),()=>initProgress()],'#method':['このサイトの学び方',()=>methodPage(),()=>{}],'#settings':['同期と AI の設定',()=>settingsPage(),()=>initSettings()]}[location.hash];
+  if(lp&&hasLearn()){$('#main').innerHTML=lp[1]();document.title=`${lp[0]}｜${SITE.name}`;lp[2]()}
+  else if(tm&&useTracks()&&trackInfo(tm[1])){$('#main').innerHTML=trackHome(tm[1]);document.title=`${trackInfo(tm[1]).title}｜${SITE.name}`}
   else if(location.hash==='#exam'&&hasExams()){$('#main').innerHTML=examPage();document.title=`模擬試験｜${SITE.name}`;initExam()}
   else if(location.hash==='#fields'){$('#main').innerHTML=fieldsPage();document.title=`${SITE.fieldsNav}｜${SITE.name}`;initFields()}
   else if(i<0||i>=LESSONS.length){$('#main').innerHTML=home();document.title=`${SITE.title}｜${SITE.name}`}
   else{$('#main').innerHTML=lesson(i);document.title=`${chapterLabel(i)} ${LESSONS[i].title}｜${SITE.name}`;bindLesson(i)}
   if(focus){window.scrollTo({top:0,behavior:'instant'});$('#main').focus({preventScroll:true})}
 }
-loadState();
+if(typeof consumeConnectHash==='function')consumeConnectHash();
+loadState();if(hasLearn())ensureLearnState();
 $('#search').oninput=nav;
 $('.skip').onclick=e=>{e.preventDefault();$('#main').focus()};
 window.addEventListener('hashchange',()=>render(true));
 $('#print').onclick=()=>{preparePrintDocument();window.print()};
 window.addEventListener('afterprint',cleanPrintDocument);
 render();
+if(hasLearn()){syncNow().then(()=>{if(syncInfo.state==='ok')render()});window.addEventListener('focus',()=>{if(getSettings().token)syncNow()})}
